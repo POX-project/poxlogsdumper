@@ -1,0 +1,92 @@
+name: Build and Package POX Logs Dumper
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Package Recovery ZIP
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Toolchain Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zip coreutils tree
+
+      - name: Build Flashable ZIP
+        run: |
+          chmod +x build.sh
+          ./build.sh
+
+      - name: Validate ZIP Integrity
+        run: |
+          echo "==> Verifying archive structure..."
+          unzip -t out/poxlogsdumper.zip
+          unzip -l out/poxlogsdumper.zip
+          echo "==> Verifying update-binary presence..."
+          unzip -p out/poxlogsdumper.zip META-INF/com/google/android/update-binary | head -n 5
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: poxlogsdumper-package
+          path: |
+            out/*.zip
+            out/*.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish Rolling Release (Main Branch)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "POX Logs Dumper (Latest Continuous Build)"
+          body: |
+            ### Automated Continuous Build
+            - **Commit**: `${{ github.sha }}`
+            - **Branch**: `main`
+            - **Package**: `poxlogsdumper.zip` (Flashable via TWRP, OrangeFox, PBRP, LineageOS Recovery)
+            - **Zero Modification**: Read-only diagnostics extraction.
+          files: |
+            out/poxlogsdumper.zip
+            out/poxlogsdumper.zip.sha256
+          prerelease: false
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish Tagged Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            out/poxlogsdumper.zip
+            out/poxlogsdumper.zip.sha256
+            out/poxlogsdumper-*.zip
+            out/poxlogsdumper-*.zip.sha256
+          name: "POX Logs Dumper ${{ github.ref_name }}"
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

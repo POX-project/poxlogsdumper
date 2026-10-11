@@ -1,0 +1,12 @@
+# Build output directories & archives
+out/
+*.zip
+*.sha256
+*.tar.gz
+
+# Temporary and editor files
+.DS_Store
+*.swp
+*.swo
+*~
+*.log
